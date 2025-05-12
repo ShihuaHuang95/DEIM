@@ -7,6 +7,8 @@ Copyright (c) 2023 lyuwenyu. All Rights Reserved.
 """
 
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
@@ -66,7 +68,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--tuning', type=str, help='tuning from checkpoint')
     parser.add_argument('-d', '--device', type=str, help='device',)
     parser.add_argument('--seed', type=int, help='exp reproducibility')
-    parser.add_argument('--use-amp', action='store_true', default=True, help='auto mixed precision training')
+    parser.add_argument('--use-amp', action='store_true', help='auto mixed precision training')
     parser.add_argument('--output-dir', type=str, help='output directoy')
     parser.add_argument('--summary-dir', type=str, help='tensorboard summry')
     parser.add_argument('--test-only', action='store_true', default=False,)

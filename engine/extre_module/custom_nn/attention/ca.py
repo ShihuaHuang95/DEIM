@@ -1,0 +1,84 @@
+'''
+本文件由BiliBili：魔傀面具整理
+engine/extre_module/module_images/CVPR2021-Coordinate Attention.png
+论文链接：https://arxiv.org/pdf/2103.02907  
+'''  
+ 
+import warnings
+warnings.filterwarnings('ignore')   
+from calflops import calculate_flops    
+     
+import torch
+import torch.nn as nn   
+     
+class h_sigmoid(nn.Module):     
+    def __init__(self, inplace=True):  
+        super(h_sigmoid, self).__init__()
+        self.relu = nn.ReLU6(inplace=inplace)
+     
+    def forward(self, x):
+        return self.relu(x + 3) / 6 
+    
+class h_swish(nn.Module):     
+    def __init__(self, inplace=True):  
+        super(h_swish, self).__init__()
+        self.sigmoid = h_sigmoid(inplace=inplace) 
+    
+    def forward(self, x):  
+        return x * self.sigmoid(x) 
+   
+class CoordAtt(nn.Module): 
+    def __init__(self, inp, reduction=32):
+        super(CoordAtt, self).__init__()
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+
+        mip = max(8, inp // reduction)   
+     
+        self.conv1 = nn.Conv2d(inp, mip, kernel_size=1, stride=1, padding=0)     
+        self.bn1 = nn.BatchNorm2d(mip)     
+        self.act = h_swish() 
+
+        self.conv_h = nn.Conv2d(mip, inp, kernel_size=1, stride=1, padding=0)
+        self.conv_w = nn.Conv2d(mip, inp, kernel_size=1, stride=1, padding=0)     
+
+    def forward(self, x):  
+        identity = x   
+     
+        n, c, h, w = x.size()   
+        x_h = self.pool_h(x)
+        x_w = self.pool_w(x).permute(0, 1, 3, 2)
+
+        y = torch.cat([x_h, x_w], dim=2)     
+        y = self.conv1(y) 
+        y = self.bn1(y)
+        y = self.act(y)   
+
+        x_h, x_w = torch.split(y, [h, w], dim=2)
+        x_w = x_w.permute(0, 1, 3, 2)
+
+        a_h = self.conv_h(x_h).sigmoid()   
+        a_w = self.conv_w(x_w).sigmoid()  
+  
+        out = identity * a_w * a_h
+ 
+        return out
+
+if __name__ == '__main__':
+    RED, GREEN, BLUE, YELLOW, ORANGE, RESET = "\033[91m", "\033[92m", "\033[94m", "\033[93m", "\033[38;5;208m", "\033[0m"   
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')    
+    batch_size, channel, height, width = 1, 16, 32, 32     
+    inputs = torch.randn((batch_size, channel, height, width)).to(device)  
+
+    module = CoordAtt(channel, reduction=32).to(device)
+   
+    outputs = module(inputs)   
+    print(GREEN + f'inputs.size:{inputs.size()} outputs.size:{outputs.size()}' + RESET)     
+
+    print(ORANGE)
+    flops, macs, _ = calculate_flops(model=module,
+                                     input_shape=(batch_size, channel, height, width),
+                                     output_as_string=True,    
+                                     output_precision=4,
+                                     print_detailed=True)
+    print(RESET)

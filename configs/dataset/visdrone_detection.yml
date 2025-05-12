@@ -11,8 +11,8 @@ train_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: /root/autodl-tmp/visdrone2019/VisDrone2019-DET-train/images      # 修改全局路径,以下同理
-    ann_file: D:\DownloadedByBroswer\visdrone2019\VisDrone2019-DET-train\train.json
+    img_folder: /data/WZW/visdrone2019/VisDrone2019-DET-train/images      # 修改全局路径,以下同理
+    ann_file: /data/WZW/visdrone2019/VisDrone2019-DET-train/train.json
     return_masks: False
     transforms:
       type: Compose
@@ -28,8 +28,8 @@ val_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: D:\DownloadedByBroswer\visdrone2019\VisDrone2019-DET-val\images
-    ann_file: D:\DownloadedByBroswer\visdrone2019\VisDrone2019-DET-val\val.json
+    img_folder: /data/WZW/visdrone2019/VisDrone2019-DET-val/images
+    ann_file: /data/WZW/visdrone2019/VisDrone2019-DET-val/val.json
     return_masks: False
     transforms:
       type: Compose

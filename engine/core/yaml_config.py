@@ -45,6 +45,7 @@ class YAMLConfig(BaseConfig):
         return super().postprocessor
 
     @property
+    # 损失函数
     def criterion(self, ) -> torch.nn.Module:
         if self._criterion is None and 'criterion' in self.yaml_cfg:
             self._criterion = create(self.yaml_cfg['criterion'], self.global_cfg)
