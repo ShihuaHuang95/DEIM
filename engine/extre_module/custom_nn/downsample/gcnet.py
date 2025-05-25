@@ -93,7 +93,7 @@ class ContextGuidedBlock_Down(nn.Module):
         self.F_glo = FGlo(nOut, reduction)  
   
     def forward(self, input):
-        print(111)
+        print(1111111111111111)
         output = self.conv1x1(input)
         loc = self.F_loc(output)
         sur = self.F_sur(output)     
@@ -125,3 +125,5 @@ if __name__ == '__main__':
                                      output_precision=4,  
                                      print_detailed=True)   
     print(RESET)
+    
+    # python tools/benchmark/get_info.py -c configs/test/deim_hgnetv2_n_visdrone.yml

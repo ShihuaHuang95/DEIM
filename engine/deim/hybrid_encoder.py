@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from .utils import get_activation
 
 from ..core import register
-
+from ..extre_module.custom_nn.downsample.gcnet import ContextGuidedBlock_Down
 __all__ = ['HybridEncoder']
 
 
@@ -242,6 +242,7 @@ class TransformerEncoderLayer(nn.Module):
         return tensor if pos_embed is None else tensor + pos_embed
 
     def forward(self, src, src_mask=None, pos_embed=None) -> torch.Tensor:
+        print('!!!!!!!!!!!!!!!!!!!!', src.size())
         residual = src
         if self.normalize_before:
             src = self.norm1(src)
@@ -255,6 +256,7 @@ class TransformerEncoderLayer(nn.Module):
         residual = src
         if self.normalize_before:
             src = self.norm2(src)
+        print('!!!!!!!!!!!!!!!!!!!!', src.size())
         src = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = residual + self.dropout2(src)
         if not self.normalize_before:
@@ -345,6 +347,7 @@ class HybridEncoder(nn.Module):
             else:
                 self.lateral_convs.append(ConvNormLayer_fuse(hidden_dim, hidden_dim, 1, 1, act=act))
             self.fpn_blocks.append(
+                # 对应RT-DETR的RepBlock
                 RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
                 if version == 'dfine' else CSPLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion, bottletype=VGGBlock)
             )
@@ -353,10 +356,17 @@ class HybridEncoder(nn.Module):
         self.downsample_convs = nn.ModuleList()
         self.pan_blocks = nn.ModuleList()
         for _ in range(len(in_channels) - 1):
+            # 下采样卷积，将低层特征下采样以匹配高层特征尺寸
+            # 通常会将来自不同层的特征图进行拼接或加和操作。为了使这些操作顺利进行，
+            # 参与融合的特征图必须在通道数上保持一致
             self.downsample_convs.append(
-                nn.Sequential(SCDown(hidden_dim, hidden_dim, 3, 2, act=act)) \
+                nn.Sequential(ContextGuidedBlock_Down(hidden_dim, 2*hidden_dim), ConvNormLayer_fuse(hidden_dim*2, hidden_dim, 1, 1)) \
                 if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
             )
+            # self.downsample_convs.append(
+            #     nn.Sequential(SCDown(hidden_dim, hidden_dim, 3, 2, act=act)) \
+            #     if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
+            # )
             self.pan_blocks.append(
                 RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
                 if version == 'dfine' else CSPLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion, bottletype=VGGBlock)

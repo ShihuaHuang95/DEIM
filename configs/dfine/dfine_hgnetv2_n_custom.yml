@@ -27,7 +27,7 @@ HybridEncoder:
 
   # intra
   hidden_dim: 128
-  # 对应上面的32倍下采样
+  # 对应上面feat_strides的32倍下采样
   use_encoder_idx: [1]
   dim_feedforward: 512
 
