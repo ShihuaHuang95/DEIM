@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from .utils import get_activation
 
 from ..core import register
-from ..extre_module.custom_nn.downsample.gcnet import ContextGuidedBlock_Down
+from ..extre_module.custom_nn.module.fasterblock import Faster_Block
 __all__ = ['HybridEncoder']
 
 
@@ -190,7 +190,7 @@ class CSPLayer(nn.Module):
         x_1 = self.bottlenecks(x_1)
         return self.conv3(x_1 + x_2)
 
-class RepNCSPELAN4(nn.Module):
+class RepNCSPELAN4_faster(nn.Module):
     # csp-elan
     def __init__(self, c1, c2, c3, c4, n=3,
                  bias=False,
@@ -198,8 +198,8 @@ class RepNCSPELAN4(nn.Module):
         super().__init__()
         self.c = c3//2
         self.cv1 = ConvNormLayer_fuse(c1, c3, 1, 1, bias=bias, act=act)
-        self.cv2 = nn.Sequential(CSPLayer(c3//2, c4, n, 1, bias=bias, act=act, bottletype=VGGBlock), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
-        self.cv3 = nn.Sequential(CSPLayer(c4, c4, n, 1, bias=bias, act=act, bottletype=VGGBlock), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
+        self.cv2 = nn.Sequential(CSPLayer(c3//2, c4, n, 1, bias=bias, act=act, bottletype=Faster_Block), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
+        self.cv3 = nn.Sequential(CSPLayer(c4, c4, n, 1, bias=bias, act=act, bottletype=Faster_Block), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
         self.cv4 = ConvNormLayer_fuse(c3+(2*c4), c2, 1, 1, bias=bias, act=act)
 
     def forward_chunk(self, x):
@@ -348,7 +348,7 @@ class HybridEncoder(nn.Module):
                 self.lateral_convs.append(ConvNormLayer_fuse(hidden_dim, hidden_dim, 1, 1, act=act))
             self.fpn_blocks.append(
                 # 对应RT-DETR的RepBlock
-                RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
+                RepNCSPELAN4_faster(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
                 if version == 'dfine' else CSPLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion, bottletype=VGGBlock)
             )
 
@@ -359,16 +359,16 @@ class HybridEncoder(nn.Module):
             # 下采样卷积，将低层特征下采样以匹配高层特征尺寸
             # 通常会将来自不同层的特征图进行拼接或加和操作。为了使这些操作顺利进行，
             # 参与融合的特征图必须在通道数上保持一致
-            self.downsample_convs.append(
-                nn.Sequential(ContextGuidedBlock_Down(hidden_dim, 2*hidden_dim), ConvNormLayer_fuse(hidden_dim*2, hidden_dim, 1, 1)) \
-                if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
-            )
             # self.downsample_convs.append(
-            #     nn.Sequential(SCDown(hidden_dim, hidden_dim, 3, 2, act=act)) \
+            #     nn.Sequential(ContextGuidedBlock_Down(hidden_dim, 2*hidden_dim), ConvNormLayer_fuse(hidden_dim*2, hidden_dim, 1, 1)) \
             #     if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
             # )
+            self.downsample_convs.append(
+                nn.Sequential(SCDown(hidden_dim, hidden_dim, 3, 2, act=act)) \
+                if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
+            )
             self.pan_blocks.append(
-                RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
+                RepNCSPELAN4_faster(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
                 if version == 'dfine' else CSPLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion, bottletype=VGGBlock)
             )
 

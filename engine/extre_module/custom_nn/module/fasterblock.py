@@ -53,7 +53,8 @@ class Faster_Block(nn.Module):
                  mlp_ratio=2,
                  drop_path=0.1,    
                  layer_scale_init_value=0.0,     
-                 pconv_fw_type='split_cat' 
+                 pconv_fw_type='split_cat',
+                 act = None
                  ):     
         super().__init__()
         self.ouc = ouc
