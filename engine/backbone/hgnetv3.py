@@ -20,7 +20,7 @@ kaiming_normal_ = nn.init.kaiming_normal_
 zeros_ = nn.init.zeros_
 ones_ = nn.init.ones_
 
-__all__ = ['HGNetv2']
+__all__ = ['HGNetv3']
 
 
 class LearnableAffineBlock(nn.Module):
@@ -369,7 +369,7 @@ class HG_Stage(nn.Module):
 
 
 @register()
-class HGNetv2(nn.Module):
+class HGNetv3(nn.Module):
     """
     HGNetV2
     Args:
@@ -469,7 +469,7 @@ class HGNetv2(nn.Module):
                  freeze_at=0,
                  freeze_norm=True,
                  pretrained=True,
-                 agg='se',
+                 agg='ese',
                  local_model_dir='weight/hgnetv2/'):
         super().__init__()
         self.use_lab = use_lab
