@@ -19,7 +19,9 @@ from engine.extre_module.ultralytics_nn.conv import Conv
 class Partial_Conv(nn.Module): 
     def __init__(self, inc, ouc, n_div=4, forward='split_cat'):
         super().__init__()  
+        # 参与卷积的通道数
         self.dim_conv3 = inc // n_div 
+        # 保持不变，不参与卷积
         self.dim_untouched = inc - self.dim_conv3  
         self.partial_conv3 = nn.Conv2d(self.dim_conv3, self.dim_conv3, 3, 1, 1, bias=False)  
      
