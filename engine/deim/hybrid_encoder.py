@@ -188,7 +188,15 @@ class CSPLayer(nn.Module):
         x_1 = self.conv1(x)
         x_1 = self.bottlenecks(x_1)
         return self.conv3(x_1 + x_2)
+'''
+c1 ＝ 模块的 输入 通道数。
 
+c3 ＝ cv1 投影后的通道数，并被拆分成两路各 c3/2。
+
+c4 ＝ 中间 cv2、cv3 的输入和输出通道数。
+
+c2 ＝ 模块的 输出 通道数，由最后一层 cv4 给出。
+'''
 class RepNCSPELAN4(nn.Module):
     # csp-elan
     def __init__(self, c1, c2, c3, c4, n=3,
@@ -199,6 +207,7 @@ class RepNCSPELAN4(nn.Module):
         self.cv1 = ConvNormLayer_fuse(c1, c3, 1, 1, bias=bias, act=act)
         self.cv2 = nn.Sequential(CSPLayer(c3//2, c4, n, 1, bias=bias, act=act, bottletype=VGGBlock), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
         self.cv3 = nn.Sequential(CSPLayer(c4, c4, n, 1, bias=bias, act=act, bottletype=VGGBlock), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
+        # inc=c3+(2*c4) outc=c2
         self.cv4 = ConvNormLayer_fuse(c3+(2*c4), c2, 1, 1, bias=bias, act=act)
 
     def forward_chunk(self, x):
@@ -314,6 +323,7 @@ class HybridEncoder(nn.Module):
         self.out_strides = feat_strides
 
         # channel projection
+        # 通道数全部投影成hidden_dim
         self.input_proj = nn.ModuleList()
         for in_channel in in_channels:
             proj = nn.Sequential(OrderedDict([
@@ -403,6 +413,7 @@ class HybridEncoder(nn.Module):
 
     def forward(self, feats):
         assert len(feats) == len(self.in_channels)
+        # 此处通道全部是hidden_dim
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
 
         # encoder
@@ -424,6 +435,7 @@ class HybridEncoder(nn.Module):
         inner_outs = [proj_feats[-1]]
         for idx in range(len(self.in_channels) - 1, 0, -1):
             feat_heigh = inner_outs[0]
+            # 通道数是 hidden_dim
             feat_low = proj_feats[idx - 1]
             feat_heigh = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_heigh)
             inner_outs[0] = feat_heigh
@@ -436,6 +448,8 @@ class HybridEncoder(nn.Module):
             feat_low = outs[-1]
             feat_height = inner_outs[idx + 1]
             downsample_feat = self.downsample_convs[idx](feat_low)
+            # 通道数是 hidden_dim*2
+            # [batch, channel, height, width]  dim=1 按照channel维度拼接！
             out = self.pan_blocks[idx](torch.concat([downsample_feat, feat_height], dim=1))
             outs.append(out)
 

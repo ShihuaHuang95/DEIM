@@ -71,17 +71,20 @@ class ContextGuideFusionModule(nn.Module):
     
         self.adjust_conv = nn.Identity() 
         if inc[0] != inc[1]:     
+            # 对齐inc[1]通道数
             self.adjust_conv = Conv(inc[0], inc[1], k=1)    
         
         self.se = SEAttention(inc[1] * 2)  
   
         if (inc[1] * 2) != ouc: 
+            # 对齐outc通道数
             self.conv1x1 = Conv(inc[1] * 2, ouc)     
         else: 
             self.conv1x1 = nn.Identity() 
     
     def forward(self, x): 
         x0, x1 = x
+        # 如果 x0 和 x1 的通道数不同，则调整 x0 的通道数，使其与 x1 相同。(self.adjust_conv里面设定了)
         x0 = self.adjust_conv(x0)
    
         x_concat = torch.cat([x0, x1], dim=1) # n c h w

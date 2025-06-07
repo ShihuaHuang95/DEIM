@@ -1,0 +1,63 @@
+__include__: [
+  '../dfine/dfine_hgnetv2_n_custom.yml',
+  '../base/deim.yml'
+]
+
+print_freq: 20
+output_dir: ./outputs/deim_hgnetv2_n_custom
+
+# 再往上找到base层的encoder进行修改(dfine_hgnetv2)
+DEIM:
+  encoder: HybridEncoder_CGFM
+# 此处是修改 dfine_hgnetv2_n_custom.yml
+HybridEncoder_CGFM:
+  in_channels: [512, 1024]
+  feat_strides: [16, 32]
+
+  # intra
+  hidden_dim: 128
+  # 对应上面feat_strides的32倍下采样
+  use_encoder_idx: [1]
+  dim_feedforward: 512
+
+  # cross
+  expansion: 0.34
+  depth_mult: 0.5
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 0.0004
+    -
+      params: '^(?=.*backbone)(?=.*norm|bn).*$'
+      lr: 0.0004
+      weight_decay: 0.
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+
+  lr: 0.0008
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+# Increase to search for the optimal ema
+epoches: 160 # 148 + 12
+
+## Our LR-Scheduler
+flat_epoch: 78    # 4 + epoch // 2, e.g., 40 = 4 + 72 / 2
+no_aug_epoch: 12
+lr_gamma: 1.0
+
+## Our DataAug
+train_dataloader: 
+  dataset: 
+    transforms:
+      policy:
+        epoch: [4, 78, 148]   # list 
+
+  collate_fn:
+    mixup_epochs: [4, 78]
+    stop_epoch: 148
+    base_size_repeat: ~

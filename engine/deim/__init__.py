@@ -16,3 +16,4 @@ from .rtdetrv2_decoder import RTDETRTransformerv2
 
 from .postprocessor import PostProcessor
 from .deim_criterion import DEIMCriterion
+from .hybrid_encoder_cgfm import HybridEncoder_CGFM
