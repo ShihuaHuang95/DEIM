@@ -308,6 +308,7 @@ class HG_Block(nn.Module):
         # output = [x, x1, x2, x3]
         x = torch.cat(output, dim=1)
         x = self.aggregation(x)
+        # 做残差连接的特征图通道数必须相同！(即x 与 identity chs一样)
         if self.residual:
             x = self.drop_path(x) + identity
         return x

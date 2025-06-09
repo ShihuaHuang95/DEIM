@@ -16,6 +16,7 @@ import torch.nn.functional as F
 from .utils import get_activation
 
 from ..core import register
+from engine.extre_module.custom_nn.upsample.eucb import EUCB
 __all__ = ['HybridEncoder']
 
 
@@ -211,6 +212,7 @@ class RepNCSPELAN4(nn.Module):
         self.cv4 = ConvNormLayer_fuse(c3+(2*c4), c2, 1, 1, bias=bias, act=act)
 
     def forward_chunk(self, x):
+        # 对半 split
         y = list(self.cv1(x).chunk(2, 1))
         y.extend((m(y[-1])) for m in [self.cv2, self.cv3])
         return self.cv4(torch.cat(y, 1))
@@ -265,6 +267,7 @@ class TransformerEncoderLayer(nn.Module):
         if self.normalize_before:
             src = self.norm2(src)
         # print('!!!!!!!!!!!!!!!!!!!!', src.size())
+        # MLP
         src = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = residual + self.dropout2(src)
         if not self.normalize_before:
@@ -349,12 +352,14 @@ class HybridEncoder(nn.Module):
         # top-down fpn
         self.lateral_convs = nn.ModuleList()
         self.fpn_blocks = nn.ModuleList()
+        self.fpn_upsample_blocks = nn.ModuleList()
         for _ in range(len(in_channels) - 1, 0, -1):
             # TODO, add activation for those lateral convs
             if version == 'dfine':
                 self.lateral_convs.append(ConvNormLayer_fuse(hidden_dim, hidden_dim, 1, 1))
             else:
                 self.lateral_convs.append(ConvNormLayer_fuse(hidden_dim, hidden_dim, 1, 1, act=act))
+            self.fpn_upsample_blocks.append(EUCB(hidden_dim))
             self.fpn_blocks.append(
                 # 对应RT-DETR的RepBlock
                 RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
@@ -416,7 +421,7 @@ class HybridEncoder(nn.Module):
         # 此处通道全部是hidden_dim
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
 
-        # encoder
+        # transformer encoder(仅针对p5层)
         if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.use_encoder_idx):
                 h, w = proj_feats[enc_ind].shape[2:]
@@ -431,7 +436,7 @@ class HybridEncoder(nn.Module):
                 memory :torch.Tensor = self.encoder[i](src_flatten, pos_embed=pos_embed)
                 proj_feats[enc_ind] = memory.permute(0, 2, 1).reshape(-1, self.hidden_dim, h, w).contiguous()
 
-        # broadcasting and fusion
+        # fpn融合：自顶向下融合高层特征到低层特征
         inner_outs = [proj_feats[-1]]
         for idx in range(len(self.in_channels) - 1, 0, -1):
             feat_heigh = inner_outs[0]
@@ -439,10 +444,13 @@ class HybridEncoder(nn.Module):
             feat_low = proj_feats[idx - 1]
             feat_heigh = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_heigh)
             inner_outs[0] = feat_heigh
-            upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
+            # 修改上采样部分, 取对应的列表下标！
+            # upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
+            upsample_feat = self.fpn_upsample_blocks[len(self.in_channels) - 1 - idx](feat_heigh)
             inner_out = self.fpn_blocks[len(self.in_channels)-1-idx](torch.concat([upsample_feat, feat_low], dim=1))
             inner_outs.insert(0, inner_out)
 
+        # PAN 融合：自底向上融合低层特征到高层特征 
         outs = [inner_outs[0]]
         for idx in range(len(self.in_channels) - 1):
             feat_low = outs[-1]
