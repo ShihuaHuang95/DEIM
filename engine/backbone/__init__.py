@@ -18,3 +18,5 @@ from .csp_resnet import CSPResNet
 from .csp_darknet import CSPDarkNet, CSPPAN
 
 from .hgnetv2 import HGNetv2
+from .hgnetv3 import HGNetv3
+from .hgnetv2_pconv import HGNetv2_PConv

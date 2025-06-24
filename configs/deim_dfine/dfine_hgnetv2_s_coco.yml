@@ -1,5 +1,6 @@
 __include__: [
-  '../dataset/coco_detection.yml',
+  # '../dataset/coco_detection.yml',
+  '/data/WZW/DEIM/configs/dataset/visdrone_detection.yml',
   '../runtime.yml',
   '../base/dataloader.yml',
   '../base/optimizer.yml',

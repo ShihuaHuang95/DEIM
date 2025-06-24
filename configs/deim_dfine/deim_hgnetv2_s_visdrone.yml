@@ -1,0 +1,46 @@
+__include__: [
+  './dfine_hgnetv2_s_coco.yml',
+  '../base/deim.yml'
+]
+
+print_freq: 100
+output_dir: ./outputs/deim_hgnetv2_s_visdrone
+  
+
+
+optimizer:
+  type: AdamW
+  params: 
+    - 
+      params: '^(?=.*backbone)(?!.*bn).*$'
+      lr: 0.0002
+    - 
+      params: '^(?=.*(?:norm|bn)).*$'     # except bias
+      weight_decay: 0.
+
+  lr: 0.0004
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+
+# Increase to search for the optimal ema
+epoches: 132 # 120 + 4n
+
+## Our LR-Scheduler
+flat_epoch: 64    # 4 + epoch // 2, e.g., 40 = 4 + 72 / 2
+no_aug_epoch: 12
+
+## Our DataAug
+train_dataloader: 
+  dataset: 
+    transforms:
+      policy:
+        epoch: [4, 64, 120]   # list 
+  total_batch_size: 4
+
+  collate_fn:
+    mixup_epochs: [4, 64]
+    stop_epoch: 120
+
+val_dataloader:
+  total_batch_size: 8

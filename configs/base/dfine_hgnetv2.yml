@@ -21,7 +21,7 @@ flat_epoch: 4000000
 no_aug_epoch: 0
 
 HGNetv2:
-  pretrained: True
+  pretrained: False
   local_model_dir: ../RT-DETR-main/D-FINE/weight/hgnetv2/
 
 HybridEncoder:

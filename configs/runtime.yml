@@ -1,11 +1,11 @@
 print_freq: 100
 output_dir: './logs'
 checkpoint_freq: 12
-
+plot_train_batch_freq: 12
 
 sync_bn: True
 find_unused_parameters: False
-
+verbose_type: 'progress' # origin:原始的输出方式 progress:进度条形式
 
 use_amp: False
 scaler:

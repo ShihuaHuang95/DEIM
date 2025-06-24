@@ -1,0 +1,49 @@
+__include__: [
+  '../dfine/dfine_hgnetv2_n_custom.yml',
+  'visdrone2019.yml',
+  '../base/deim.yml',
+]
+
+print_freq: 20
+output_dir: ./outputs/deim_hgnetv2_n_custom
+
+HGNetv2:
+  agg: ese
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 0.0004
+    -
+      params: '^(?=.*backbone)(?=.*norm|bn).*$'
+      lr: 0.0004
+      weight_decay: 0.
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+
+  lr: 0.0008
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+# Increase to search for the optimal ema
+epoches: 160 # 148 + 12
+
+## Our LR-Scheduler
+flat_epoch: 78    # 4 + epoch // 2, e.g., 40 = 4 + 72 / 2
+no_aug_epoch: 12
+lr_gamma: 1.0
+
+## Our DataAug
+train_dataloader: 
+  dataset: 
+    transforms:
+      policy:
+        epoch: [4, 78, 148]   # list 
+
+  collate_fn:
+    mixup_epochs: [4, 78]
+    stop_epoch: 148
+    base_size_repeat: ~

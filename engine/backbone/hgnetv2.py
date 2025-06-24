@@ -12,6 +12,8 @@ import os
 from .common import FrozenBatchNorm2d
 from ..core import register
 import logging
+from ..extre_module.custom_nn.attention.ema import EMA
+from ..extre_module.custom_nn.attention.simam import SimAM
 
 # Constants for initialization
 kaiming_normal_ = nn.init.kaiming_normal_
@@ -237,6 +239,9 @@ class HG_Block(nn.Module):
 
         # feature aggregation
         total_chs = in_chs + layer_num * mid_chs
+        
+        print(f'-----------this is agg: {agg}---------------')
+        
         if agg == 'se':
             aggregation_squeeze_conv = ConvBNAct(
                 total_chs,
@@ -256,7 +261,7 @@ class HG_Block(nn.Module):
                 aggregation_squeeze_conv,
                 aggregation_excitation_conv,
             )
-        else:
+        elif agg == 'ese':    # 默认ESE注意力机制
             aggregation_conv = ConvBNAct(
                 total_chs,
                 out_chs,
@@ -269,7 +274,26 @@ class HG_Block(nn.Module):
                 aggregation_conv,
                 att,
             )
-
+        elif agg == 'ema':   # mywork: ema注意力
+            aggregation_conv = ConvBNAct(
+                total_chs, out_chs, kernel_size=1, stride=1, use_lab=use_lab
+            )
+            att = EMA(out_chs)
+            self.aggregation = nn.Sequential(
+                aggregation_conv,
+                att,
+            )
+        elif agg == 'simam': # simam注意力 
+            aggregation_conv = ConvBNAct(
+                total_chs, out_chs, kernel_size=1, stride=1, use_lab=use_lab
+            )     
+            att = SimAM()
+            self.aggregation = nn.Sequential( 
+                aggregation_conv,  
+                att,    
+            )
+        else:
+            raise Exception(f"param agg{agg} Illegal")
         self.drop_path = nn.Dropout(drop_path) if drop_path else nn.Identity()
 
     def forward(self, x):
@@ -278,8 +302,13 @@ class HG_Block(nn.Module):
         for layer in self.layers:
             x = layer(x)
             output.append(x)
+        # x1 = layers_1(x)
+        # x2 = layers_2(x1)
+        # x3 = layers_3(x2)
+        # output = [x, x1, x2, x3]
         x = torch.cat(output, dim=1)
         x = self.aggregation(x)
+        # 做残差连接的特征图通道数必须相同！(即x 与 identity chs一样)
         if self.residual:
             x = self.drop_path(x) + identity
         return x
@@ -297,7 +326,7 @@ class HG_Stage(nn.Module):
             light_block=False,
             kernel_size=3,
             use_lab=False,
-            agg='se',
+            agg='ese',
             drop_path=0.,
     ):
         super().__init__()
@@ -441,6 +470,7 @@ class HGNetv2(nn.Module):
                  freeze_at=0,
                  freeze_norm=True,
                  pretrained=True,
+                 agg='se',
                  local_model_dir='weight/hgnetv2/'):
         super().__init__()
         self.use_lab = use_lab
@@ -475,7 +505,8 @@ class HGNetv2(nn.Module):
                     downsample,
                     light_block,
                     kernel_size,
-                    use_lab))
+                    use_lab,
+                    agg))
 
         if freeze_at >= 0:
             self._freeze_parameters(self.stem)
@@ -495,7 +526,7 @@ class HGNetv2(nn.Module):
                     print(f"Loaded stage1 {name} HGNetV2 from local file.")
                 else:
                     # If the file doesn't exist locally, download from the URL
-                    if torch.distributed.get_rank() == 0:
+                    if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
                         print(GREEN + "If the pretrained HGNetV2 can't be downloaded automatically. Please check your network connection." + RESET)
                         print(GREEN + "Please check your network connection. Or download the model manually from " + RESET + f"{download_url}" + GREEN + " to " + RESET + f"{local_model_dir}." + RESET)
                         state = torch.hub.load_state_dict_from_url(download_url, map_location='cpu', model_dir=local_model_dir)
@@ -509,7 +540,7 @@ class HGNetv2(nn.Module):
                 self.load_state_dict(state)
 
             except (Exception, KeyboardInterrupt) as e:
-                if torch.distributed.get_rank() == 0:
+                if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
                     print(f"{str(e)}")
                     logging.error(RED + "CRITICAL WARNING: Failed to load pretrained HGNetV2 model" + RESET)
                     logging.error(GREEN + "Please check your network connection. Or download the model manually from " \

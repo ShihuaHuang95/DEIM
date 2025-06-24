@@ -1,0 +1,65 @@
+__include__: [
+  '../dataset/custom_detection.yml',
+  '../runtime.yml',
+  '../base/dataloader_dfine.yml',
+  '../base/optimizer.yml',
+  '../base/dfine_hgnetv2.yml',
+]
+
+print_freq: 20
+output_dir: ./outputs/dfine_hgnetv2_s_custom
+
+
+DEIM:
+  backbone: HGNetv2
+
+HGNetv2:
+  name: 'B0'
+  return_idx: [1, 2, 3]
+  freeze_at: -1
+  freeze_norm: False
+  use_lab: True
+
+DFINETransformer:
+  num_layers: 3  # 4 5 6
+  eval_idx: -1  # -2 -3 -4
+
+HybridEncoder:
+  in_channels: [256, 512, 1024]
+  hidden_dim: 256
+  depth_mult: 0.34
+  expansion: 0.5
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone)(?!.*norm|bn).*$'
+      lr: 0.0001
+    -
+      params: '^(?=.*backbone)(?=.*norm|bn).*$'
+      lr: 0.0001
+      weight_decay: 0.
+    -
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+
+  lr: 0.0002
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+
+# Increase to search for the optimal ema
+epoches: 132 # 120 + 4n
+train_dataloader:
+  dataset:
+    transforms:
+      policy:
+        epoch: 120
+  collate_fn:
+    stop_epoch: 120
+    ema_restart_decay: 0.9999
+    base_size_repeat: 20
+  total_batch_size: 4
+val_dataloader:
+  total_batch_size: 4

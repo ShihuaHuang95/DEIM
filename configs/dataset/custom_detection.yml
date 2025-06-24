@@ -11,8 +11,8 @@ train_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: /data/yourdataset/train
-    ann_file: /data/yourdataset/train/train.json
+    img_folder: /data/WZW/visdrone2019/VisDrone2019-DET-train/images
+    ann_file: /data/WZW/visdrone2019/VisDrone2019-DET-train/train.json
     return_masks: False
     transforms:
       type: Compose
@@ -28,8 +28,8 @@ val_dataloader:
   type: DataLoader
   dataset:
     type: CocoDetection
-    img_folder: /data/yourdataset/val
-    ann_file: /data/yourdataset/val/val.json
+    img_folder: /data/WZW/visdrone2019/VisDrone2019-DET-val/images
+    ann_file: /data/WZW/visdrone2019/VisDrone2019-DET-val/val.json
     return_masks: False
     transforms:
       type: Compose

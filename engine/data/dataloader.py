@@ -23,7 +23,7 @@ torchvision.disable_beta_transforms_warning()
 from copy import deepcopy
 from PIL import Image, ImageDraw
 import os
-
+import numpy as np
 
 __all__ = [
     'DataLoader',
@@ -178,7 +178,8 @@ class BatchImageCollateFunction(BaseCollateFunction):
         return images, targets
 
     def __call__(self, items):
-        images = torch.cat([x[0][None] for x in items], dim=0)
+        # print(type(items[0][0]))
+        images = torch.cat([torch.from_numpy(np.array(x[0])[None]) for x in items], dim=0)
         targets = [x[1] for x in items]
 
         # Mixup

@@ -16,7 +16,7 @@ import torch.nn.functional as F
 from .utils import get_activation
 
 from ..core import register
-
+from engine.extre_module.custom_nn.upsample.eucb import EUCB
 __all__ = ['HybridEncoder']
 
 
@@ -189,7 +189,15 @@ class CSPLayer(nn.Module):
         x_1 = self.conv1(x)
         x_1 = self.bottlenecks(x_1)
         return self.conv3(x_1 + x_2)
+'''
+c1 ＝ 模块的 输入 通道数。
 
+c3 ＝ cv1 投影后的通道数，并被拆分成两路各 c3/2。
+
+c4 ＝ 中间 cv2、cv3 的输入和输出通道数。
+
+c2 ＝ 模块的 输出 通道数，由最后一层 cv4 给出。
+'''
 class RepNCSPELAN4(nn.Module):
     # csp-elan
     def __init__(self, c1, c2, c3, c4, n=3,
@@ -200,9 +208,11 @@ class RepNCSPELAN4(nn.Module):
         self.cv1 = ConvNormLayer_fuse(c1, c3, 1, 1, bias=bias, act=act)
         self.cv2 = nn.Sequential(CSPLayer(c3//2, c4, n, 1, bias=bias, act=act, bottletype=VGGBlock), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
         self.cv3 = nn.Sequential(CSPLayer(c4, c4, n, 1, bias=bias, act=act, bottletype=VGGBlock), ConvNormLayer_fuse(c4, c4, 3, 1, bias=bias, act=act))
+        # inc=c3+(2*c4) outc=c2
         self.cv4 = ConvNormLayer_fuse(c3+(2*c4), c2, 1, 1, bias=bias, act=act)
 
     def forward_chunk(self, x):
+        # 对半 split
         y = list(self.cv1(x).chunk(2, 1))
         y.extend((m(y[-1])) for m in [self.cv2, self.cv3])
         return self.cv4(torch.cat(y, 1))
@@ -242,6 +252,7 @@ class TransformerEncoderLayer(nn.Module):
         return tensor if pos_embed is None else tensor + pos_embed
 
     def forward(self, src, src_mask=None, pos_embed=None) -> torch.Tensor:
+        # print('!!!!!!!!!!!!!!!!!!!!', src.size())
         residual = src
         if self.normalize_before:
             src = self.norm1(src)
@@ -255,6 +266,8 @@ class TransformerEncoderLayer(nn.Module):
         residual = src
         if self.normalize_before:
             src = self.norm2(src)
+        # print('!!!!!!!!!!!!!!!!!!!!', src.size())
+        # MLP
         src = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = residual + self.dropout2(src)
         if not self.normalize_before:
@@ -313,6 +326,7 @@ class HybridEncoder(nn.Module):
         self.out_strides = feat_strides
 
         # channel projection
+        # 通道数全部投影成hidden_dim
         self.input_proj = nn.ModuleList()
         for in_channel in in_channels:
             proj = nn.Sequential(OrderedDict([
@@ -338,13 +352,16 @@ class HybridEncoder(nn.Module):
         # top-down fpn
         self.lateral_convs = nn.ModuleList()
         self.fpn_blocks = nn.ModuleList()
+        self.fpn_upsample_blocks = nn.ModuleList()
         for _ in range(len(in_channels) - 1, 0, -1):
             # TODO, add activation for those lateral convs
             if version == 'dfine':
                 self.lateral_convs.append(ConvNormLayer_fuse(hidden_dim, hidden_dim, 1, 1))
             else:
                 self.lateral_convs.append(ConvNormLayer_fuse(hidden_dim, hidden_dim, 1, 1, act=act))
+            self.fpn_upsample_blocks.append(EUCB(hidden_dim))
             self.fpn_blocks.append(
+                # 对应RT-DETR的RepBlock
                 RepNCSPELAN4(hidden_dim * 2, hidden_dim, hidden_dim * 2, round(expansion * hidden_dim // 2), round(3 * depth_mult), act=act) \
                 if version == 'dfine' else CSPLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion, bottletype=VGGBlock)
             )
@@ -353,6 +370,13 @@ class HybridEncoder(nn.Module):
         self.downsample_convs = nn.ModuleList()
         self.pan_blocks = nn.ModuleList()
         for _ in range(len(in_channels) - 1):
+            # 下采样卷积，将低层特征下采样以匹配高层特征尺寸
+            # 通常会将来自不同层的特征图进行拼接或加和操作。为了使这些操作顺利进行，
+            # 参与融合的特征图必须在通道数上保持一致
+            # self.downsample_convs.append(
+            #     nn.Sequential(ContextGuidedBlock_Down(hidden_dim, 2*hidden_dim), ConvNormLayer_fuse(hidden_dim*2, hidden_dim, 1, 1)) \
+            #     if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
+            # )
             self.downsample_convs.append(
                 nn.Sequential(SCDown(hidden_dim, hidden_dim, 3, 2, act=act)) \
                 if version == 'dfine' else ConvNormLayer_fuse(hidden_dim, hidden_dim, 3, 2, act=act)
@@ -394,9 +418,10 @@ class HybridEncoder(nn.Module):
 
     def forward(self, feats):
         assert len(feats) == len(self.in_channels)
+        # 此处通道全部是hidden_dim
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
 
-        # encoder
+        # transformer encoder(仅针对p5层)
         if self.num_encoder_layers > 0:
             for i, enc_ind in enumerate(self.use_encoder_idx):
                 h, w = proj_feats[enc_ind].shape[2:]
@@ -411,22 +436,28 @@ class HybridEncoder(nn.Module):
                 memory :torch.Tensor = self.encoder[i](src_flatten, pos_embed=pos_embed)
                 proj_feats[enc_ind] = memory.permute(0, 2, 1).reshape(-1, self.hidden_dim, h, w).contiguous()
 
-        # broadcasting and fusion
+        # fpn融合：自顶向下融合高层特征到低层特征
         inner_outs = [proj_feats[-1]]
         for idx in range(len(self.in_channels) - 1, 0, -1):
             feat_heigh = inner_outs[0]
+            # 通道数是 hidden_dim
             feat_low = proj_feats[idx - 1]
             feat_heigh = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_heigh)
             inner_outs[0] = feat_heigh
-            upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
+            # 修改上采样部分, 取对应的列表下标！
+            # upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
+            upsample_feat = self.fpn_upsample_blocks[len(self.in_channels) - 1 - idx](feat_heigh)
             inner_out = self.fpn_blocks[len(self.in_channels)-1-idx](torch.concat([upsample_feat, feat_low], dim=1))
             inner_outs.insert(0, inner_out)
 
+        # PAN 融合：自底向上融合低层特征到高层特征 
         outs = [inner_outs[0]]
         for idx in range(len(self.in_channels) - 1):
             feat_low = outs[-1]
             feat_height = inner_outs[idx + 1]
             downsample_feat = self.downsample_convs[idx](feat_low)
+            # 通道数是 hidden_dim*2
+            # [batch, channel, height, width]  dim=1 按照channel维度拼接！
             out = self.pan_blocks[idx](torch.concat([downsample_feat, feat_height], dim=1))
             outs.append(out)
 

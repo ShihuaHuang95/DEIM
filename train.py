@@ -7,6 +7,8 @@ Copyright (c) 2023 lyuwenyu. All Rights Reserved.
 """
 
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
