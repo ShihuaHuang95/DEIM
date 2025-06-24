@@ -6,3 +6,8 @@ tensorboard
 scipy
 calflops
 transformers
+defusedxml
+supervision
+onnxruntime-gpu
+onnx 
+loguru

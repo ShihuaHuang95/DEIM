@@ -150,9 +150,12 @@ def main(args):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, required=True)
-    parser.add_argument('-r', '--resume', type=str, required=True)
-    parser.add_argument('-i', '--input', type=str, required=True)
+    parser.add_argument('-c', '--config', type=str, )
+    parser.add_argument('-r', '--resume', type=str,)
+    parser.add_argument('-i', '--input', type=str, )
     parser.add_argument('-d', '--device', type=str, default='cpu')
     args = parser.parse_args()
+    args.config = "deim_hgnetv2_n_coco.yml"
+    args.resume = "deim_outputs/deim_hgnetv2_n_coco/best_stg1_converted.pth"
+    args.input = "66d8c56ea502fd4f902c330e_TC01_cupy.mp4"
     main(args)
